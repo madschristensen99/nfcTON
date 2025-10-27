@@ -1,89 +1,166 @@
 # Hoodie-NFC-Telegram  
-Standalone README / spec sheet
+**One-tap Linktree hoodies without code, wallets, or batteries.**
 
-## WHAT THIS IS
-A Telegram Mini-App that turns an NTAG213 sticker sewn into a hoodie into a personal Linktree page.  
-- First tap (tag blank) → forces registration inside Telegram.  
-- Every later tap → opens the owner's Linktree page, still inside Telegram.
+---
 
-## SEQUENCE DIAGRAM
+## 30-second pitch
+1. Attendee opens **@hoodieBot** → fills KYC → gets queued.  
+2. Staff copies short URL from dashboard → pastes into **NFC Tools** → burns to blank NTAG sticker → locks.  
+3. Anyone taps hoodie → iPhone/Android banner → Telegram Mini-App opens → Linktree page.
+
+---
+
+## End-to-end flow
+
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant A as Phone
-    participant TG as Telegram
-    participant Bot as Bot (TMA)
-    participant API as REST API
-    participant DB as Postgres
-    participant Tag as NTAG213
+  autonumber
+  participant U as User (iPhone)
+  participant B as Bot (TMA)
+  participant A as API
+  participant D as DB
+  participant S as Staff phone
+  participant T as NTAG sticker
 
-    A->>Tag: tap (blank)
-    Note over A,Tag: nothing happens (no NDEF)
-    A->>TG: open @hoodieBot
-    TG->>Bot: /start
-    Bot->>A: "Register this hoodie" button
-    A->>Bot: click → open Web-App (write-mode)
-    Bot->>API: POST /create-profile {}
-    API->>DB: INSERT short_code=gen(6)
-    API-->>Bot: 201 {shortCode:"a8x9k",url:"t.me/...?startapp=a8x9k"}
-    Bot->>A: Web-NFC prompt
-    A->>Tag: write NDEF (url)
-    Tag-->>A: OK
-    A->>Bot: fill form (name,ig,tt,email,size) → Save
-    Bot->>API: PATCH /profile/a8x9k
-    API->>DB: UPDATE row
-    API-->>Bot: 200
-    Bot->>A: "Done! Tap again to see page."
+  U->>B: /start → KYC mini-app
+  B->>U: form (name, IG, TT, email, size)
+  U->>B: submit
+  B->>A: POST /signup
+  A->>D: INSERT (code, pending)
+  A-->>B: 201 {code:"a8x9k"}
+  B->>U: "Signed up! Bring hoodie to desk."
 
-    Note over A,Tag: --- later use ---
-    A->>Tag: tap (written)
-    Tag-->>A: NDEF banner
-    A->>TG: open banner url
-    TG->>Bot: launch TMA with startapp=a8x9k
-    Bot->>API: GET /profile/a8x9k
-    API->>DB: SELECT
-    DB-->>API: row
-    API-->>Bot: JSON
-    Bot->>A: render Linktree page
+  Note over S: --- event desk ---
+  S->>A: GET /pending (dashboard)
+  A->>D: SELECT pending
+  A-->>S: [{code, name, ig, size}]
+
+  S->>S: copy URL: t.me/hoodieBot?startapp=a8x9k
+  S->>T: NFC Tools → Write URL → Lock
+  T-->>S: beep (success)
+  S->>D: PATCH /approve a8x9k
+  D-->>S: OK
+
+  Note over U: --- later ---
+  U->>T: tap hoodie
+  T-->>U: NDEF banner
+  U->>B: open banner (startapp=a8x9k)
+  B->>A: GET /profile/a8x9k
+  A->>D: SELECT
+  D-->>A: row
+  A-->>B: JSON
+  B->>U: render Linktree page
 ```
 
-## ENDPOINTS
+---
+
+## Tech stack
+
+| Layer | Tech |
+| --- | --- |
+| Bot runtime | Node 20 + TypeScript |
+| TG framework | grammY (webhooks) |
+| DB | Postgres (Neon free tier) |
+| API / static | Vercel serverless |
+| NFC write | NFC Tools app (iOS/Android) or optional Chrome PWA (Web-NFC) |
+| Lock | NFC Tools “Lock” button after write |
+| Deploy | `vercel` one-command |
+
+---
+
+## Folder map
 ```
-POST /create-profile  
-→ 201 {shortCode, url}
-
-PATCH /profile/<code>  
-Body {firstName,ig,tiktok,email,size}
-
-GET  /profile/<code>  
-→ 200 {firstName,ig,tiktok,email,size}
+hoodie-nfc-tg/
+├── packages/
+│   ├── bot/
+│   │   ├── src/
+│   │   │   ├── bot.ts          # webhook entry
+│   │   │   ├── handlers/
+│   │   │   │   ├── start.ts    # consumer KYC mini-app
+│   │   │   │   ├── admin.ts    # /admin → dashboard button
+│   │   │   │   └── viewer.ts   # startapp=code → viewer mini-app
+│   │   └── static/
+│   │       ├── consumer.html   # KYC form (TMA)
+│   │       ├── admin.html      # staff dashboard (read-only TMA)
+│   │       └── viewer.html     # Linktree page (TMA)
+│   ├── api/
+│   │   ├── signup.ts           # POST /signup
+│   │   ├── approve.ts          # PATCH /approve
+│   │   ├── profile/[code].ts   # GET  profile
+│   │   └── pending.ts          # GET  pending codes (admin)
+│   ├── writer/                 # optional Chrome PWA (Web-NFC)
+│   │   └── index.html          # 1-click write + lock
+│   └── db/
+│       ├── schema.sql
+│       └── seed.sql
+├── vercel.json
+├── .env.example
+└── README.md
 ```
 
-## NFC RULES
-- Blank tag = no NDEF → manual bot open.  
-- Write only: `https://t.me/hoodieBot?startapp=<6-char-code>`  
-- Lock tag after write (read-only).  
-- 59-byte URL fits NTAG213 with room to spare.
+---
 
-## STACK
-- Front-end: React + Vite + @tma.js/sdk  
-- Back-end: Node serverless (Vercel)  
-- DB: Postgres (shortCode PK)  
-- NFC writer: Web-NFC (Android) or USB reader + Node CLI (Linux/Mac)
+## Quick start (dev)
 
-## DEPLOY
-1. Create Telegram bot → set Mini-App URL  
-2. Deploy API → set `DATABASE_URL`  
-3. Build React bundle → upload to bot Web-App field  
-4. Done.
+```bash
+git clone https://github.com/your-org/hoodie-nfc-tg
+cd hoodie-nfc-tg
+npm i
+cp .env.example .env
+# fill TG_BOT_TOKEN & DATABASE_URL
+npm run dev          # local tunnel + hot reload
+```
 
-## TEST WITHOUT A HOODIE
-Stick NTAG213 on index card, use USB reader or Android Chrome to write, tap with iPhone → banner → Linktree page.
+Deploy:
+```bash
+vercel --prod        # pushes bot + api + statics
+```
 
-## COST
-- NTAG213 stickers: ~$0.20 each  
-- USB reader: ~$18 (optional)  
-- Hosting: free tier Vercel + Neon Postgres
+---
 
-## LICENSE
-MIT — do whatever you want.
+## Environment variables
+```
+TG_BOT_TOKEN=700...:AAH...
+DATABASE_URL=postgres://...
+BOT_DOMAIN=https://hoodie-tg.vercel.app
+```
+
+---
+
+## DB schema
+```sql
+CREATE TABLE hoodies (
+  code        CHAR(6) PRIMARY KEY,
+  first_name  TEXT,
+  ig          TEXT,
+  tiktok      TEXT,
+  email       TEXT,
+  size        TEXT,
+  status      TEXT DEFAULT 'pending', -- pending | burned
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  burned_at   TIMESTAMPTZ
+);
+```
+
+---
+
+## NFC how-to (staff cheat-sheet)
+1. Open **dashboard** (link in `/admin` button).  
+2. Hit **“Copy URL”** next to pending row.  
+3. Open **NFC Tools** → **Write** → **Add record** → **URL** → **Paste** → **Write**.  
+4. Touch blank **NTAG213** sticker → **OK**.  
+5. Optional: **More** → **Lock tag** (prevents overwrite).  
+6. Stick label (`a8x9k – @alice – M`) on bag.
+
+---
+
+## Cost & specs
+- **NTAG213 sticker 25 mm**: ≈ $0.20 each (buy 100 pack).  
+- **URL length**: 59 bytes → fits with 76 B spare.  
+- **Lock**: one tap in NFC Tools → tag becomes read-only.  
+- **Reader**: any phone with NFC; optional USB **ACR122U** for bulk.
+
+---
+
+## License
+MIT – do whatever you want.
