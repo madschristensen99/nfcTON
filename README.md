@@ -154,13 +154,6 @@ CREATE TABLE hoodies (
 
 ---
 
-## Cost & specs
-- **NTAG213 sticker 25 mm**: ≈ $0.20 each (buy 100 pack).  
-- **URL length**: 59 bytes → fits with 76 B spare.  
-- **Lock**: one tap in NFC Tools → tag becomes read-only.  
-- **Reader**: any phone with NFC; optional USB **ACR122U** for bulk.
-
----
 
 ## License
-MIT – do whatever you want.
+MIT
