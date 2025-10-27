@@ -35,8 +35,7 @@ sequenceDiagram
     API-->>Bot: 200
     Bot->>A: "Done! Tap again to see page."
 
-    rect rgb(230,230,230)
-    Note over A,Tag: later use
+    Note over A,Tag: --- later use ---
     A->>Tag: tap (written)
     Tag-->>A: NDEF banner
     A->>TG: open banner url
@@ -46,7 +45,6 @@ sequenceDiagram
     DB-->>API: row
     API-->>Bot: JSON
     Bot->>A: render Linktree page
-    end
 ```
 
 ## ENDPOINTS
@@ -88,4 +86,4 @@ Stick NTAG213 on index card, use USB reader or Android Chrome to write, tap with
 - Hosting: free tier Vercel + Neon Postgres
 
 ## LICENSE
-MIT
+MIT — do whatever you want.
