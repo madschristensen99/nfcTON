@@ -23,7 +23,7 @@ sequenceDiagram
   participant T as NTAG sticker
 
   U->>B: /start → KYC mini-app
-  B->>U: form (name, IG, TT, email, size)
+  B->>U: form (name, TG handle, email, size)
   U->>B: submit
   B->>A: POST /signup
   A->>D: INSERT (code, pending)
@@ -33,7 +33,7 @@ sequenceDiagram
   Note over S: --- event desk ---
   S->>A: GET /pending (dashboard)
   A->>D: SELECT pending
-  A-->>S: [{code, name, ig, size}]
+  A-->>S: [{code, name, tg, size}]
 
   S->>S: copy URL: t.me/hoodieBot?startapp=a8x9k
   S->>T: NFC Tools → Write URL → Lock
@@ -103,7 +103,7 @@ hoodie-nfc-tg/
 ## Quick start (dev)
 
 ```bash
-git clone https://github.com/your-org/hoodie-nfc-tg
+git clone https://github.com/your-org/hoodie-nfc-tg 
 cd hoodie-nfc-tg
 npm i
 cp .env.example .env
@@ -122,7 +122,7 @@ vercel --prod        # pushes bot + api + statics
 ```
 TG_BOT_TOKEN=700...:AAH...
 DATABASE_URL=postgres://...
-BOT_DOMAIN=https://hoodie-tg.vercel.app
+BOT_DOMAIN=https://hoodie-tg.vercel.app 
 ```
 
 ---
@@ -132,8 +132,7 @@ BOT_DOMAIN=https://hoodie-tg.vercel.app
 CREATE TABLE hoodies (
   code        CHAR(6) PRIMARY KEY,
   first_name  TEXT,
-  ig          TEXT,
-  tiktok      TEXT,
+  tg_handle   TEXT,
   email       TEXT,
   size        TEXT,
   status      TEXT DEFAULT 'pending', -- pending | burned
@@ -153,7 +152,6 @@ CREATE TABLE hoodies (
 6. Stick label (`a8x9k – @alice – M`) on bag.
 
 ---
-
 
 ## License
 MIT
