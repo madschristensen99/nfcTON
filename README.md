@@ -1,212 +1,91 @@
-# Hoodie-TON  
-NFC-enabled Telegram Mini-App that mints a TON blockchain record for every hoodie and serves a Linktree-style page on tap.
+# Hoodie-NFC-Telegram  
+Standalone README / spec sheet
 
----
+## WHAT THIS IS
+A Telegram Mini-App that turns an NTAG213 sticker sewn into a hoodie into a personal Linktree page.  
+- First tap (tag blank) → forces registration inside Telegram.  
+- Every later tap → opens the owner's Linktree page, still inside Telegram.
 
-## 1. 30-second elevator pitch
-Staff open the mini-app inside Telegram, fill in the wearer’s socials, mint a TON NFT (soul-bound), and write the unique `https://t.me/hoodieTonBot?startapp=<shortCode>` to an NTAG213 stitched in the hoodie.  
-Attendee taps sleeve → Telegram opens → on-chain data is fetched → Linktree page rendered.
-
----
-
-## 2. High-level architecture
-```
-┌---------------┐        HTTPS        ┌----------------┐
-│  Staff TMA    │◀-----TON Connect───▶│  User Wallet   │
-│  (React)      │                     │   (TON)        │
-└-------┬-------┘                     └----------------┘
-        │ write NFT
-        ▼
-┌---------------┐        JSON         ┌----------------┐
-│  Serverless   │◀--------------------▶│  TON RPC       │
-│  API (Vercel) │   mint/retrieve     │  (toncenter)   │
-└-------┬-------┘                     └----------------┘
-        │ Web-NFC / USB
-        ▼
-┌---------------┐      13.56 MHz      ┌----------------┐
-│  NTAG213      │◀-------NFC---------▶│  Phone         │
-│  in hoodie    │                     │  (iOS/Android) │
-└---------------┘                     └----------------┘
-```
-
----
-
-## 3. Tech stack
-| Layer | Tech |
-|-------|------|
-| Front-end (staff & viewer) | React 18 + Vite + @tma.js/sdk + Tailwind |
-| Wallet bridge | TON Connect 2 |
-| Blockchain | TON (soul-bound NFT) |
-| Smart-contract | FunC, compiled with `func-js` |
-| Metadata storage | IPFS via TON Storage gateway |
-| NFC writer | Web-NFC (Android) or Node-Electron wrapper (Linux/Mac) |
-| CI/CD | GitHub → Vercel (zero-config) |
-
----
-
-## 4. Repository map
-```
-hoodie-ton/
-├─ packages/
-│  ├─ staff-tma/          # Telegram Mini-App for writers
-│  ├─ viewer-tma/         # Public Linktree page
-│  ├─ nfc-writer-electron/ # Desktop writer for iPad stations
-│  ├─ smart-contract/     # FunC source + tests
-│  └─ api/                # Vercel serverless functions
-├─ README.md
-└─ sequence-diagrams.md   # (this doc)
-```
-
----
-
-## 5. End-to-end flows
-
-### 5.1 Mint & Write (staff)
+## SEQUENCE DIAGRAM
 ```mermaid
 sequenceDiagram
-    participant S as Staff (TG)
-    participant TMA as Staff TMA
-    participant API as /api/*
-    participant TON as TON blockchain
-    participant NFC as NTAG213
-
-    S->>TMA: open mini-app
-    TMA->>TMA: tonConnect.restoreConnection()
-    TMA->>S: prompt form (name, IG, TT, email, size)
-    S->>TMA: submit
-    TMA->>API: POST /prepare {metadata}
-    API->>API: upload JSON to IPFS → cid
-    API->>TON: craft mintMessage(cid)
-    API->>TMA: return txCell & shortCode
-    TMA->>S: tonConnect.sendTransaction(txCell)
-    S->>TON: sign & broadcast
-    TON-->>API: tx confirmed
-    API-->>TMA: 200 {hoodieId,shortCode}
-    TMA->>TMA: buildNDEF(https://t.me/hoodieTonBot?startapp=shortCode)
-    TMA->>NFC: Web-NFC write()
-    NFC-->>TMA: success
-    TMA->>S: green check + label print
-```
-
-### 5.2 Viewer tap (attendee)
-```mermaid
-sequenceDiagram
-    participant A as Attendee phone
+    autonumber
+    participant A as Phone
     participant TG as Telegram
-    participant TMA as Viewer TMA
-    participant API as /api/*
-    participant TON as TON blockchain
+    participant Bot as Bot (TMA)
+    participant API as REST API
+    participant DB as Postgres
+    participant Tag as NTAG213
 
-    A->>A: tap hoodie
-    A->>TG: open t.me/hoodieTonBot?startapp=sc
-    TG->>TMA: launch mini-app + initData
-    TMA->>API: GET /profile?code=sc
-    API->>TON: runGetMethod getNFTData(uint256(sc))
-    TON-->>API: owner, cid
-    API->>IPFS: fetch cid/json
-    IPFS-->>API: {name,ig,tiktok,img}
-    API-->>TMA: 200 {profile}
-    TMA->>A: render Linktree page
+    A->>Tag: tap (blank)
+    Note over A,Tag: nothing happens (no NDEF)
+    A->>TG: open @hoodieBot
+    TG->>Bot: /start
+    Bot->>A: "Register this hoodie" button
+    A->>Bot: click → open Web-App (write-mode)
+    Bot->>API: POST /create-profile {}
+    API->>DB: INSERT short_code=gen(6)
+    API-->>Bot: 201 {shortCode:"a8x9k",url:"t.me/...?startapp=a8x9k"}
+    Bot->>A: Web-NFC prompt
+    A->>Tag: write NDEF (url)
+    Tag-->>A: OK
+    A->>Bot: fill form (name,ig,tt,email,size) → Save
+    Bot->>API: PATCH /profile/a8x9k
+    API->>DB: UPDATE row
+    API-->>Bot: 200
+    Bot->>A: "Done! Tap again to see page."
+
+    rect rgb(230,230,230)
+    Note over A,Tag: later use
+    A->>Tag: tap (written)
+    Tag-->>A: NDEF banner
+    A->>TG: open banner url
+    TG->>Bot: launch TMA with startapp=a8x9k
+    Bot->>API: GET /profile/a8x9k
+    API->>DB: SELECT
+    DB-->>API: row
+    API-->>Bot: JSON
+    Bot->>A: render Linktree page
+    end
 ```
 
----
-
-## 6. API contract
-### POST /prepare  
-**Body**  
-```json
-{
-  "firstName": "Alice",
-  "lastInitial": "L",
-  "ig": "alice_m",
-  "tiktok": "alice_onTok",
-  "email": "alice@example.com",
-  "size": "M"
-}
+## ENDPOINTS
 ```
-**Response 200**  
-```json
-{
-  "shortCode": "a8x9k",
-  "txCell": "te6ccgEBBAEABQ...",
-  "hoodieId": 12345678
-}
+POST /create-profile  
+→ 201 {shortCode, url}
+
+PATCH /profile/<code>  
+Body {firstName,ig,tiktok,email,size}
+
+GET  /profile/<code>  
+→ 200 {firstName,ig,tiktok,email,size}
 ```
 
-### GET /profile?code=a8x9k  
-**Response 200**  
-```json
-{
-  "name": "Alice L",
-  "ig": "alice_m",
-  "tiktok": "alice_onTok",
-  "img": "https://ipfs.io/ipfs/bafybei..."
-}
-```
+## NFC RULES
+- Blank tag = no NDEF → manual bot open.  
+- Write only: `https://t.me/hoodieBot?startapp=<6-char-code>`  
+- Lock tag after write (read-only).  
+- 59-byte URL fits NTAG213 with room to spare.
 
----
+## STACK
+- Front-end: React + Vite + @tma.js/sdk  
+- Back-end: Node serverless (Vercel)  
+- DB: Postgres (shortCode PK)  
+- NFC writer: Web-NFC (Android) or USB reader + Node CLI (Linux/Mac)
 
-## 7. NFC implementation details
-- **NDEF record**: URI identifier `0x04` (https://) + payload `t.me/hoodieTonBot?startapp=<shortCode>`  
-- **Max URL length**: 59 bytes → fits NTAG213 (144 B) with 76 B to spare.  
-- **Lock recommended**: set `LOCK_CTRL_TLV` after write to prevent re-write.  
-- **Error handling**: if write fails, retry once; if still bad, discard sticker and re-print same shortCode on new tag.
+## DEPLOY
+1. Create Telegram bot → set Mini-App URL  
+2. Deploy API → set `DATABASE_URL`  
+3. Build React bundle → upload to bot Web-App field  
+4. Done.
 
----
+## TEST WITHOUT A HOODIE
+Stick NTAG213 on index card, use USB reader or Android Chrome to write, tap with iPhone → banner → Linktree page.
 
-## 8. Smart-contract excerpt (FunC)
-```func
-;; hoodie.fc
-(int, slice) get_nft_data() method_id {
-    slice ds = get_data().begin_parse();
-    int hoodieId = ds~load_uint(128);
-    slice ownerAddr = ds~load_msg_addr();
-    slice contentSlice = ds~load_ref().begin_parse();
-    return (hoodieId, contentSlice);
-}
-```
-Compile & deploy with Blueprint:  
-```bash
-cd smart-contract
-npm i
-npx blueprint run deploy
-```
+## COST
+- NTAG213 stickers: ~$0.20 each  
+- USB reader: ~$18 (optional)  
+- Hosting: free tier Vercel + Neon Postgres
 
----
-
-## 9. Local development
-```bash
-git clone https://github.com/your-org/hoodie-ton
-cd hoodie-ton
-npm i
-npm run dev:staff   # http://localhost:5173  (TMA stub)
-npm run dev:viewer  # http://localhost:5174
-npm run test:contract # Mocha + sandbox
-```
-**NFC on Linux**: plug ACR122U → `npm run nfc:write --code=a8x9k`
-
----
-
-## 10. Production checklist
-- [ ] Deploy smart-contract (mainnet) & top-up 5 TON  
-- [ ] Set env vars (`TONCENTER_KEY`, `IPFS_KEY`, `TG_BOT_TOKEN`) in Vercel  
-- [ ] Upload metadata template to IPFS once → pin  
-- [ ] Register `@hoodieTonBot` with BotFather → set Mini-App URL  
-- [ ] Print 200 NTAG213 stickers + 200 size labels  
-- [ ] Burn-test 5 tags (write → lock → tap → verify)  
-- [ ] Staff training video (2 min screen-cap)
-
----
-
-## 11. Security & privacy
-- No private keys stored server-side.  
-- Email addresses kept off-chain (only in NFT metadata encrypted with event pubkey).  
-- Short codes are base-36 of `hoodieId` → unguessable, enumerable only by owner.  
-- Tags are read-only after write → attendee cannot repurpose.
-
----
-
-## 12. Support & license
-MIT © 2024 hoodie-ton contributors  
-Issues / PR → GitHub  
-Telegram dev chat → https://t.me/+abcd1234
+## LICENSE
+MIT
