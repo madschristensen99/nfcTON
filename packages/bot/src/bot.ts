@@ -61,7 +61,8 @@ if (process.env.NODE_ENV === 'production') {
   const app = express();
   app.use(express.json());
   
-  app.use(`/bot${token}`, webhookCallback(bot, 'express'));
+  // Use the correct webhook path for Vercel
+  app.use(webhookCallback(bot, 'express'));
   
   app.listen(process.env.PORT || 3000, () => {
     console.log('Bot webhook server started');
