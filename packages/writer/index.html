@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFC Writer (Optional)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8f9fa;
+            color: #333;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .header {
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #0088cc;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>📱 NFC Writer</h2>
+            <p>Write Telegram links to NFC tags using Web NFC</p>
+        </div>
+
+        <div class="form-group">
+            <label for="codeInput">Profile Code</label>
+            <input type="text" id="codeInput" placeholder="e.g., abc123" maxlength="6">
+        </div>
+
+        <button id="writeBtn" onclick="writeNFC()">📱 Write to NFC</button>
+
+        <div id="status"></div>
+
+        <div style="margin-top: 30px; font-size: 14px; color: #666;">
+            <p><strong>Note:</strong> This Web NFC feature only works on Chrome/Android.</p>
+            <p>Staff should use the NFC Tools app on iOS/Android for reliable writing.</p>
+        </div>
+    </div>
+
+    <script>
+        const writeBtn = document.getElementById('writeBtn');
+        const codeInput = document.getElementById('codeInput');
+        const status = document.getElementById('status');
+
+        async function writeNFC() {
+            const code = codeInput.value.trim();
+            
+            if (!code || code.length !== 6) {
+                showStatus('Please enter a valid 6-character code', 'error');
+                return;
+            }
+
+            if (!('NDEFReader' in window)) {
+                showStatus('Web NFC is not supported on this device. Use NFC Tools app instead.', 'warning');
+                return;
+            }
+
+            try {
+                const ndef = new NDEFReader();
+                showStatus('Ready to write! Hold NFC tag to device...', 'success');
+                
+                await ndef.write({
+                    records: [{
+                        recordType: "url",
+                        data: `t.me/YourBotUsername?start=${code}`
+                    }]
+                });
+                
+                showStatus('✅ Successfully written to NFC tag!', 'success');
+                
+                // Mark as approved
+                try {
+                    await fetch(`/api/approve/${code}`, {
+                        method: 'PATCH'
+                    });
+                    showStatus('✅ Written and approved!', 'success');
+                } catch (e) {
+                    console.log('Could not auto-approve:', e);
+                }
+                
+            } catch (error) {
+                showStatus('❌ ' + error.message, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = type;
+            status.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

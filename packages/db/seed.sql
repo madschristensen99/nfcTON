@@ -1,0 +1,5 @@
+-- Optional seed data for testing
+-- INSERT INTO hoodies (code, first_name, tg_handle, email, size, status)
+-- VALUES 
+--   ('abc123', 'Alice', '@alice', 'alice@example.com', 'M', 'pending'),
+--   ('def456', 'Bob', '@bob', 'bob@example.com', 'L', 'pending');

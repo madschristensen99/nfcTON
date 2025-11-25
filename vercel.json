@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "name": "hoodie-nfc-tg",
+  "builds": [
+    {
+      "src": "packages/bot/src/bot.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "packages/api/index.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "packages/bot/static/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/packages/api/index.ts"
+    },
+    {
+      "src": "/bot(.*)",
+      "dest": "/packages/bot/src/bot.ts"
+    },
+    {
+      "src": "/packages/bot/static/(.*)",
+      "dest": "/packages/bot/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/packages/bot/src/bot.ts"
+    }
+  ],
+  "env": {
+    "TG_BOT_TOKEN": "@tg_bot_token",
+    "DATABASE_URL": "@database_url",
+    "BOT_DOMAIN": "@bot_domain"
+  }
+}
