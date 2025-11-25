@@ -4,43 +4,38 @@
   "functions": {
     "packages/api/index.ts": {
       "runtime": "nodejs18.x"
-    },
-    "packages/bot/src/bot.ts": {
-      "runtime": "nodejs18.x"
     }
   },
+  "builds": [
+    {
+      "src": "packages/api/index.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "packages/bot/src/bot.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "packages/bot/static/**",
+      "use": "@vercel/static"
+    }
+  ],
   "routes": [
     {
       "src": "/api/(.*)",
       "dest": "/packages/api/index.ts"
     },
     {
-      "src": "/.*",
+      "src": "/bot",
       "dest": "/packages/bot/src/bot.ts"
     },
     {
-      "src": "/bot/(.*)",
+      "src": "/([^.]+)",
       "dest": "/packages/bot/src/bot.ts"
     },
     {
-      "src": "/static/(.*)",
+      "src": "/(.*)",
       "dest": "/packages/bot/static/$1"
-    },
-    {
-      "src": "/admin",
-      "dest": "/packages/bot/static/admin.html"
-    },
-    {
-      "src": "/viewer",
-      "dest": "/packages/bot/static/viewer.html"
-    },
-    {
-      "src": "/consumer",
-      "dest": "/packages/bot/static/consumer.html"
-    },
-    {
-      "src": "/",
-      "dest": "/packages/bot/static/consumer.html"
     }
   ],
   "env": {
