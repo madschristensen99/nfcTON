@@ -162,14 +162,15 @@ app.patch('/api/approve/:code', async (req, res) => {
   }
 });
 
-// Bot webhook endpoint
-app.post('/bot', webhookCallback(bot, 'express'));
-
-// Bot polling for development (optional)
-if (process.env.NODE_ENV !== 'production') {
-  // Uncomment for polling mode while developing
-  // bot.start({ drop_pending_updates: true });
-  // console.log('🔧 Bot started in polling mode');
+// Bot setup based on environment
+if (process.env.NODE_ENV === 'development') {
+  // Use polling for local development
+  bot.start({ drop_pending_updates: true });
+  console.log('🔧 Bot started in DEVELOPMENT polling mode - commands now work!');
+  console.log('💬 Bot commands: /start, /admin, /viewer');
+} else {
+  // Production webhook mode
+  app.post('/bot', webhookCallback(bot, 'express'));
 }
 
 // Start server
