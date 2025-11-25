@@ -130,9 +130,5 @@ app.get('/profile/:code', async (req, res) => {
   }
 });
 
-const port = process.env.PORT || 3001;
-app.listen(port, () => {
-  console.log(`API server running on port ${port}`);
-});
-
+// Export as Express router for use in server.js
 export default app;

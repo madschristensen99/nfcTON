@@ -56,5 +56,12 @@ bot.catch((err) => {
   console.error('Bot error:', err);
 });
 
-// Export handler for Vercel
-export default webhookCallback(bot, 'express');
+// Create express router for bot webhook
+const botApp = express();
+botApp.use(express.json());
+botApp.use(webhookCallback(bot, 'express'));
+
+// Also expose webhook endpoint for testing
+botApp.post('/', webhookCallback(bot, 'express'));
+
+export default botApp;
