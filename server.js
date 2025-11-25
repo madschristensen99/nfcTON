@@ -52,36 +52,15 @@ bot.command('start', async (ctx) => {
     return;
   }
 
-  await ctx.reply('👋 Welcome to Hoodie NFC!\n\nGet your personalized Linktree hoodie', {
-    reply_markup: {
-      inline_keyboard: [[{
-        text: '🎽 Sign Up for Hoodie',
-        web_app: { url: `${BOT_DOMAIN}/consumer.html` }
-      }]]
-    }
-  });
+  await ctx.reply('👋 Welcome to Hoodie NFC!\n\nGet your personalized Linktree hoodie\n\n🔗 Sign Up: ${BOT_DOMAIN}/consumer.html\n🔗 Admin: ${BOT_DOMAIN}/admin.html\n🔗 View: ${BOT_DOMAIN}/viewer.html');
 });
 
 bot.command('admin', async (ctx) => {
-  await ctx.reply('🔗 Admin Dashboard', {
-    reply_markup: {
-      inline_keyboard: [[{
-        text: '🛠️ Admin Panel',
-        web_app: { url: `${BOT_DOMAIN}/admin.html` }
-      }]]
-    }
-  });
+  await ctx.reply('🔗 Admin Dashboard: ${BOT_DOMAIN}/admin.html');
 });
 
 bot.command('viewer', async (ctx) => {
-  await ctx.reply('👕 View Hoodies', {
-    reply_markup: {
-      inline_keyboard: [[{
-        text: '📱 Viewer App',
-        web_app: { url: `${BOT_DOMAIN}/viewer.html` }
-      }]]
-    }
-  });
+  await ctx.reply('👕 View Hoodies: ${BOT_DOMAIN}/viewer.html');
 });
 
 // API routes

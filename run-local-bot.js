@@ -14,20 +14,24 @@ const bot = new Bot(token);
 // Simple start command
 bot.command('start', async (ctx) => {
   console.log('✅ /start from:', ctx.from?.username || ctx.from?.id);
-  await ctx.reply('👋 Hello! Your Hoodie NFC bot is now WORKING!\n\n' +
-    '🎽 Sign up: http://localhost:3000/consumer.html\n' +
-    '🛠️ Admin: http://localhost:3000/admin.html\n' +
-    '📱 View profiles: http://localhost:3000/viewer.html\n\n' +
-    '🔗 Your current server is: localhost:3000'
+  const serverUrl = process.env.SERVER_URL || 'http://localhost:3000';
+  
+  await ctx.reply('👋 Welcome to Hoodie NFC Bot!\n\n' +
+    '🎽 Sign up: ' + serverUrl + '/consumer.html\n' +
+    '🛠️ Admin: ' + serverUrl + '/admin.html\n' +
+    '📱 View profiles: ' + serverUrl + '/viewer.html\n\n' +
+    '🔗 Server: ' + serverUrl
   );
 });
 
 // Admin command
 bot.command('admin', async (ctx) => {
   console.log('✅ /admin from:', ctx.from?.username || ctx.from?.id);
-  await ctx.reply('🔗 Admin Dashboard: http://localhost:3000/admin.html', {
+  const serverUrl = process.env.SERVER_URL || 'http://localhost:3000';
+  
+  await ctx.reply('🔗 Admin Dashboard: ' + serverUrl + '/admin.html', {
     reply_markup: {
-      inline_keyboard: [[{ text: 'Open Admin', web_app: { url: 'http://localhost:3000/admin.html' } }]]
+      inline_keyboard: [[{ text: 'Open Admin', web_app: { url: serverUrl + '/admin.html' } }]]
     }
   });
 });
@@ -35,9 +39,11 @@ bot.command('admin', async (ctx) => {
 // Viewer command
 bot.command('viewer', async (ctx) => {
   console.log('✅ /viewer from:', ctx.from?.username || ctx.from?.id);
-  await ctx.reply('📱 Viewer: http://localhost:3000/viewer.html', {
+  const serverUrl = process.env.SERVER_URL || 'http://localhost:3000';
+  
+  await ctx.reply('📱 Viewer: ' + serverUrl + '/viewer.html', {
     reply_markup: {
-      inline_keyboard: [[{ text: 'Open Viewer', web_app: { url: 'http://localhost:3000/viewer.html' } }]]
+      inline_keyboard: [[{ text: 'Open Viewer', web_app: { url: serverUrl + '/viewer.html' } }]]
     }
   });
 });
