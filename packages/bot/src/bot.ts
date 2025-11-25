@@ -56,17 +56,5 @@ bot.catch((err) => {
   console.error('Bot error:', err);
 });
 
-// In production: webhook mode
-if (process.env.NODE_ENV === 'production') {
-  const app = express();
-  app.use(express.json());
-  
-  // Use the correct webhook path for Vercel
-  app.use(webhookCallback(bot, 'express'));
-  
-  app.listen(process.env.PORT || 3000, () => {
-    console.log('Bot webhook server started');
-  });
-} else {
-  bot.start();
-}
+// Export handler for Vercel
+export default webhookCallback(bot, 'express');

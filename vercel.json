@@ -15,6 +15,10 @@
       "dest": "/packages/api/index.ts"
     },
     {
+      "src": "/.*",
+      "dest": "/packages/bot/src/bot.ts"
+    },
+    {
       "src": "/bot/(.*)",
       "dest": "/packages/bot/src/bot.ts"
     },
