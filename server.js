@@ -39,6 +39,10 @@ const bot = new Bot(token);
 // Bot commands
 bot.command('start', async (ctx) => {
   const startParam = ctx?.msg?.text?.split(' ')[1];
+  const userId = ctx.from.id;
+  
+  // Check if user already has a hoodie signup
+  const existingUser = await hoodiesCollection.findOne({ telegramId: userId });
   
   if (startParam && startParam.length === 6) {
     await ctx.reply('📱 Opening your hoodie profile...', {
@@ -52,11 +56,36 @@ bot.command('start', async (ctx) => {
     return;
   }
 
+  // If user already signed up, show their profile
+  if (existingUser) {
+    let message = `🎽 Welcome back, ${existingUser.firstName}!\n\n`;
+    message += `Your Hoodie Profile #${existingUser.code}\n\n`;
+    message += `📏 Size: ${existingUser.size}\n`;
+    message += `📊 Status: ${existingUser.status}\n`;
+    
+    if (existingUser.status === 'burned') {
+      message += `✅ Approved on: ${existingUser.burnedAt.toDateString()}`;
+    } else {
+      message += `⏳ Your hoodie is pending approval`;
+    }
+    
+    await ctx.reply(message, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🔍 View Full Profile', callback_data: `view_my_profile` }],
+          [{ text: '⚙️ Admin Dashboard', callback_data: 'admin' }]
+        ]
+      }
+    });
+    return;
+  }
+
+  // New user - show signup option
   await ctx.reply(`🎽 Welcome to Hoodie NFC!\n\nGet your personalized Linktree hoodie`, {
     reply_markup: {
       inline_keyboard: [
         [{ text: '📝 Fill Signup Form', callback_data: 'signup' }],
-        [{ text: '🔍 View your profile', callback_data: 'view_profile' }],
+        [{ text: '🔍 View a profile', callback_data: 'search_profile' }],
         [{ text: '⚙️ Admin Dashboard', callback_data: 'admin' }]
       ]
     }
@@ -90,7 +119,19 @@ bot.on('callback_query:data', async (ctx) => {
   switch (data) {
     case 'signup':
       await ctx.answerCallbackQuery();
-      userSessions.set(userId, { step: 'name' });
+      // Check if user already signed up
+      const existingSignup = await hoodiesCollection.findOne({ telegramId: userId });
+      if (existingSignup) {
+        await ctx.reply(`⚠️ You already have a hoodie signup!\n\nYour code: #${existingSignup.code}\nStatus: ${existingSignup.status}`);
+        return;
+      }
+      // Get username automatically
+      const username = ctx.from.username ? `@${ctx.from.username}` : 'No username';
+      userSessions.set(userId, { 
+        step: 'name',
+        telegramId: userId,
+        tgHandle: username
+      });
       await ctx.reply("🌟 Let's get you a hoodie!\n\nWhat's your first name?");
       break;
     case 'admin':
@@ -105,6 +146,15 @@ bot.on('callback_query:data', async (ctx) => {
         });
         await ctx.reply(message);
       }
+      break;
+    case 'view_my_profile':
+      await ctx.answerCallbackQuery();
+      const userProfile = await hoodiesCollection.findOne({ telegramId: userId });
+      if (!userProfile) {
+        await ctx.reply("❌ You don't have a profile yet. Use /start to sign up!");
+        return;
+      }
+      await ctx.reply(`🎽 Your Hoodie Profile #${userProfile.code}\n\nName: ${userProfile.firstName}\nTelegram: ${userProfile.tgHandle}\nEmail: ${userProfile.email}\nSize: ${userProfile.size}\nStatus: ${userProfile.status}\nCreated: ${userProfile.createdAt.toDateString()}${userProfile.status === 'burned' ? `\n🖨️ Approved: ${userProfile.burnedAt.toDateString()}` : ''}`);
       break;
     case 'view_profile':
     case 'search_profile':
@@ -129,16 +179,9 @@ bot.on('message:text', async (ctx) => {
     switch (session.step) {
       case 'name':
         session.firstName = text;
-        session.step = 'tg';
-        userSessions.set(userId, session);
-        await ctx.reply(`Nice to meet you, ${text}! 🌟\n\nWhat's your Telegram handle? (e.g., @username)`);
-        break;
-        
-      case 'tg':
-        session.tgHandle = text.startsWith('@') ? text : '@' + text;
         session.step = 'email';
         userSessions.set(userId, session);
-        await ctx.reply("📧 Perfect! What's your email address?");
+        await ctx.reply(`Nice to meet you, ${text}! 🌟\n\n📧 What's your email address?`);
         break;
         
       case 'email':
@@ -160,10 +203,11 @@ bot.on('message:text', async (ctx) => {
           return;
         }
         
-        // Save to database
+        // Save to database with Telegram ID
         const code = generateCode();
         const signupData = {
           code,
+          telegramId: session.telegramId,
           firstName: session.firstName,
           tgHandle: session.tgHandle,
           email: session.email,
@@ -175,7 +219,7 @@ bot.on('message:text', async (ctx) => {
         await hoodiesCollection.insertOne(signupData);
         userSessions.delete(userId);
         
-        await ctx.reply(`✅ All done! Your hoodie signup is complete.\n\n🎁 Your unique code: #${code}\n📊 Current status: Pending\n\nSave this code to check your status later with /view ${code}`);
+        await ctx.reply(`✅ All done! Your hoodie signup is complete.\n\n🎁 Your unique code: #${code}\n📊 Current status: Pending\n\nYou can always check your status by pressing /start`);
         break;
     }
   } catch (error) {
