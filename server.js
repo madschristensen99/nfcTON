@@ -45,14 +45,44 @@ bot.command('start', async (ctx) => {
   const existingUser = await hoodiesCollection.findOne({ telegramId: userId });
   
   if (startParam && startParam.length === 6) {
-    await ctx.reply('📱 Opening your hoodie profile...', {
-      reply_markup: {
-        inline_keyboard: [[{
-          text: '🎯 View Profile',
-          web_app: { url: `${BOT_DOMAIN}/viewer.html?code=${startParam}` }
-        }]]
+    // Look up the profile for this code
+    const profile = await hoodiesCollection.findOne({ code: startParam });
+    
+    if (!profile) {
+      await ctx.reply('❌ Profile not found. This hoodie may not be registered yet.');
+      return;
+    }
+    
+    // Check if using HTTPS (required for Web Apps)
+    if (BOT_DOMAIN.startsWith('https://')) {
+      await ctx.reply('📱 Opening your hoodie profile...', {
+        reply_markup: {
+          inline_keyboard: [[{
+            text: '🎯 View Profile',
+            web_app: { url: `${BOT_DOMAIN}/viewer.html?code=${startParam}` }
+          }]]
+        }
+      });
+    } else {
+      // Fallback for local development (HTTP) - show profile directly
+      let message = `🎽 Hoodie Profile #${profile.code}\n\n`;
+      message += `👤 Name: ${profile.firstName}\n`;
+      message += `💬 Telegram: ${profile.tgHandle}\n`;
+      message += `📧 Email: ${profile.email}\n`;
+      message += `📍 Size: ${profile.size}\n`;
+      message += `📊 Status: ${profile.status}\n`;
+      
+      if (profile.status === 'burned') {
+        message += `\n✅ This hoodie has been approved and burned to NFC!`;
+      } else {
+        message += `\n⏳ This hoodie is pending approval.`;
       }
-    });
+      
+      message += `\n\n⚠️ To see the full Web App profile, deploy with HTTPS.`;
+      
+      // Send message without buttons to avoid URL validation issues in local dev
+      await ctx.reply(message);
+    }
     return;
   }
 
@@ -93,11 +123,39 @@ bot.command('start', async (ctx) => {
 });
 
 bot.command('admin', async (ctx) => {
-  await ctx.reply(`🔗 Admin Dashboard: ${BOT_DOMAIN}/admin.html`, {
-    reply_markup: {
-      inline_keyboard: [[{ text: '🛠️ Open Admin Dashboard', url: `${BOT_DOMAIN}/admin.html` }]]
+  const pending = await hoodiesCollection.find({ status: 'pending' }).toArray();
+  
+  // Check if using HTTPS (required for Web Apps)
+  if (BOT_DOMAIN.startsWith('https://')) {
+    await ctx.reply(`🛠️ Admin Dashboard\n\nManage pending hoodie orders and copy NFC links`, {
+      reply_markup: {
+        inline_keyboard: [[{ 
+          text: '🛠️ Open Admin Dashboard', 
+          web_app: { url: `${BOT_DOMAIN}/admin.html` } 
+        }]]
+      }
+    });
+  } else {
+    // Fallback for local development (HTTP)
+    let message = `🛠️ Admin Dashboard\n\nPending Orders: ${pending.length}\n\n`;
+    
+    if (pending.length === 0) {
+      message += '✅ No pending orders!';
+    } else {
+      message += '📋 Pending Orders:\n\n';
+      pending.forEach(item => {
+        const botUsername = ctx.me.username;
+        const nfcLink = `https://t.me/${botUsername}?start=${item.code}`;
+        message += `👤 ${item.firstName} (@${item.tgHandle.replace('@', '')})\n`;
+        message += `📍 Code: #${item.code}\n`;
+        message += `🔗 NFC Link:\n${nfcLink}\n\n`;
+      });
+      message += '💡 Copy the NFC link and burn it to the chip using NFC Tools app\n\n';
+      message += `⚠️ To use Web App dashboard, set BOT_DOMAIN to HTTPS URL in .env`;
     }
-  });
+    
+    await ctx.reply(message);
+  }
 });
 
 bot.command('viewer', async (ctx) => {
@@ -113,10 +171,11 @@ const userSessions = new Map();
 
 // Handle callback queries for interactive telegram flow
 bot.on('callback_query:data', async (ctx) => {
-  const data = ctx.callbackQuery.data;
-  const userId = ctx.from.id;
-  
-  switch (data) {
+  try {
+    const data = ctx.callbackQuery.data;
+    const userId = ctx.from.id;
+    
+    switch (data) {
     case 'signup':
       await ctx.answerCallbackQuery();
       // Check if user already signed up
@@ -137,13 +196,36 @@ bot.on('callback_query:data', async (ctx) => {
     case 'admin':
       await ctx.answerCallbackQuery();
       const pending = await hoodiesCollection.find({ status: 'pending' }).toArray();
-      if (pending.length === 0) {
-        await ctx.reply(`📊 No pending hoodies currently.`);
-      } else {
-        let message = `📋 Pending Hoodies (${pending.length}):\n\n`;
-        pending.forEach(item => {
-          message += `Code: #${item.code}\nName: ${item.firstName}\nSize: ${item.size}\nEmail: ${item.email}\n\n`;
+      
+      // Check if using HTTPS (required for Web Apps)
+      if (BOT_DOMAIN.startsWith('https://')) {
+        await ctx.reply(`🛠️ Admin Dashboard\n\nPending Orders: ${pending.length}\n\nClick below to manage orders and copy NFC links`, {
+          reply_markup: {
+            inline_keyboard: [[{ 
+              text: '🛠️ Open Admin Dashboard', 
+              web_app: { url: `${BOT_DOMAIN}/admin.html` } 
+            }]]
+          }
         });
+      } else {
+        // Fallback for local development (HTTP)
+        let message = `🛠️ Admin Dashboard\n\nPending Orders: ${pending.length}\n\n`;
+        
+        if (pending.length === 0) {
+          message += '✅ No pending orders!';
+        } else {
+          message += '📋 Pending Orders:\n\n';
+          pending.forEach(item => {
+            const botUsername = ctx.me.username;
+            const nfcLink = `https://t.me/${botUsername}?start=${item.code}`;
+            message += `👤 ${item.firstName} (@${item.tgHandle.replace('@', '')})\n`;
+            message += `📍 Code: #${item.code}\n`;
+            message += `🔗 NFC Link:\n${nfcLink}\n\n`;
+          });
+          message += '💡 Copy the NFC link and burn it to the chip using NFC Tools app\n\n';
+          message += `⚠️ To use Web App dashboard, set BOT_DOMAIN to HTTPS URL in .env`;
+        }
+        
         await ctx.reply(message);
       }
       break;
@@ -161,6 +243,14 @@ bot.on('callback_query:data', async (ctx) => {
       await ctx.answerCallbackQuery();
       await ctx.reply("To view a profile, reply with: /view CODE\n\nExample: /view abc123");
       break;
+    }
+  } catch (error) {
+    console.error('Callback query error:', error);
+    try {
+      await ctx.answerCallbackQuery();
+    } catch (e) {
+      // Ignore if callback query already answered
+    }
   }
 });
 
@@ -331,6 +421,19 @@ app.patch('/api/approve/:code', async (req, res) => {
   } catch (error) {
     console.error('Approve error:', error);
     res.status(500).json({ error: 'Failed to approve hoodie' });
+  }
+});
+
+// Global error handler for the bot
+bot.catch((err) => {
+  const ctx = err.ctx;
+  console.error(`Error while handling update ${ctx.update.update_id}:`);
+  const e = err.error;
+  if (e instanceof Error) {
+    console.error('Error name:', e.name);
+    console.error('Error message:', e.message);
+  } else {
+    console.error('Unknown error:', e);
   }
 });
 

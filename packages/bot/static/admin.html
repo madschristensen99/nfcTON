@@ -56,9 +56,27 @@
             cursor: pointer;
             font-size: 12px;
             margin-top: 8px;
+            margin-right: 8px;
         }
         .copy-btn:hover {
             background: #006ba1;
+        }
+        .approve-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .approve-btn:hover {
+            background: #218838;
+        }
+        .approve-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
         }
         .empty {
             text-align: center;
@@ -77,6 +95,14 @@
         <div class="header">
             <h2>👔 Admin Dashboard</h2>
             <p>Hoodie Management</p>
+        </div>
+        
+        <div style="background: rgba(0, 136, 204, 0.1); padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: #0088cc;">
+            <strong>💡 NFC Workflow:</strong><br>
+            1. Click "Copy NFC Link" for each order<br>
+            2. Open NFC Tools app on your phone<br>
+            3. Write the copied link to the NFC chip<br>
+            4. When tapped, the chip opens the user's Telegram profile
         </div>
         
         <div class="count" id="count">Loading...</div>
@@ -106,15 +132,23 @@
                 }
 
                 entriesDiv.innerHTML = pending.map(item => `
-                    <div class="entry">
-                        <h3>${item.first_name} (${item.tg_handle})</h3>
+                    <div class="entry" id="entry-${item.code}">
+                        <h3>${item.firstName} (${item.tgHandle})</h3>
                         <p>Size: <strong>${item.size}</strong></p>
                         <p>Email: ${item.email}</p>
-                        <p>Code: <span class="code">${item.code}</span></p>
-                        <p><small>Requested: ${new Date(item.created_at).toLocaleString()}</small></p>
-                        <button class="copy-btn" onclick="copyURL('${item.code}')">
-                            📋 Copy URL
-                        </button>
+                        <p>Code: <span class="code">#${item.code}</span></p>
+                        <p><small>Requested: ${new Date(item.createdAt).toLocaleString()}</small></p>
+                        <div>
+                            <button class="copy-btn" onclick="copyURL('${item.code}')">
+                                🔗 Copy NFC Link
+                            </button>
+                            <button class="approve-btn" onclick="approveOrder('${item.code}')">
+                                ✅ Mark as Burned
+                            </button>
+                        </div>
+                        <p style="margin-top: 8px; font-size: 11px; color: #999;">
+                            💡 Copy link, burn to NFC chip, then mark as burned
+                        </p>
                     </div>
                 `).join('');
                 
@@ -125,10 +159,54 @@
         }
 
         function copyURL(code) {
-            const url = `t.me/${tg.initDataUnsafe.bot_username}?start=${code}`;
+            // Generate proper HTTPS Telegram deep link for NFC burning
+            const botUsername = tg.initDataUnsafe?.bot?.username || window.location.hostname.split('.')[0];
+            const url = `https://t.me/${botUsername}?start=${code}`;
+            
             navigator.clipboard.writeText(url).then(() => {
-                tg.showAlert('URL copied! Paste into NFC Tools');
+                tg.showAlert(`✅ NFC Link Copied!\n\n${url}\n\nBurn this link to the NFC chip using NFC Tools app.`);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                tg.showAlert('Failed to copy. Please try again.');
             });
+        }
+
+        async function approveOrder(code) {
+            if (!confirm(`Mark order #${code} as burned and complete?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/approve/${code}`, {
+                    method: 'PATCH'
+                });
+                
+                if (response.ok) {
+                    // Remove the entry from the UI
+                    const entry = document.getElementById(`entry-${code}`);
+                    if (entry) {
+                        entry.style.transition = 'opacity 0.3s';
+                        entry.style.opacity = '0';
+                        setTimeout(() => {
+                            entry.remove();
+                            // Update count
+                            const remaining = document.querySelectorAll('.entry').length;
+                            document.getElementById('count').textContent = `${remaining} pending orders`;
+                            
+                            if (remaining === 0) {
+                                document.getElementById('entries').innerHTML = '<div class="empty">All orders have been processed! 🎉</div>';
+                            }
+                        }, 300);
+                    }
+                    tg.showAlert(`✅ Order #${code} marked as burned!`);
+                } else {
+                    const error = await response.json();
+                    tg.showAlert(`❌ Failed to approve: ${error.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Approve error:', error);
+                tg.showAlert('❌ Network error. Please try again.');
+            }
         }
 
         loadPending();

@@ -124,11 +124,11 @@
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('profile').style.display = 'block';
                     
-                    document.getElementById('name').textContent = data.first_name;
-                    document.getElementById('username').textContent = data.tg_handle;
+                    document.getElementById('name').textContent = data.firstName;
+                    document.getElementById('username').textContent = data.tgHandle;
                     document.getElementById('size').textContent = data.size;
                     
-                    document.getElementById('tgLink').href = `https://t.me/${data.tg_handle.slice(1)}`;
+                    document.getElementById('tgLink').href = `https://t.me/${data.tgHandle.slice(1)}`;
                     document.getElementById('emailLink').href = `mailto:${data.email}`;
                 } else {
                     document.getElementById('loading').style.display = 'none';
