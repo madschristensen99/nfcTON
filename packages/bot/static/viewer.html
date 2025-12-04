@@ -5,145 +5,105 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hoodie Profile</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: white;
-        }
-        .container {
-            max-width: 400px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        .profile-card {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 20px;
-        }
-        .avatar {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            background: #0088cc;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 48px;
-        }
-        .name {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .username {
-            color: rgba(255,255,255,0.8);
-            margin-bottom: 20px;
-        }
-        .link-grid {
-            display: grid;
-            gap: 15px;
-            margin-top: 30px;
-        }
-        .link-btn {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: white;
-            padding: 15px 20px;
-            border-radius: 12px;
-            text-decoration: none;
-            display: block;
-            transition: background 0.3s;
-        }
-        .link-btn:hover {
-            background: rgba(255,255,255,0.3);
-        }
-        .not-found {
-            text-align: center;
-            color: #666;
-            padding: 40px;
-        }
-        .loading {
-            text-align: center;
-            color: white;
-            padding: 40px;
-        }
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:20px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;color:white}
+        .container{max-width:400px;margin:0 auto;text-align:center}
+        .profile-card{background:rgba(255,255,255,.1);backdrop-filter:blur(10px);border-radius:20px;padding:30px;margin-bottom:20px}
+        .avatar{width:100px;height:100px;border-radius:50%;background:#0088cc;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:48px}
+        .name{font-size:24px;font-weight:bold;margin-bottom:10px}
+        .username{color:rgba(255,255,255,.8);margin-bottom:20px}
+        .link-grid{display:grid;gap:15px;margin-top:30px}
+        .link-btn{background:rgba(255,255,255,.2);border:none;color:white;padding:15px 20px;border-radius:12px;text-decoration:none;display:block;transition:background .3s}
+        .link-btn:hover{background:rgba(255,255,255,.3)}
+        .not-found{text-align:center;color:#666;padding:40px}
+        .loading{text-align:center;color:white;padding:40px}
+        #dbg{background:#ff0;color:#000;padding:10px;font:12px/1.4 monospace;white-space:pre-wrap;word-break:break-all}
     </style>
 </head>
 <body>
+    <!-- DEBUG BAR -->
+    <pre id="dbg" style="background:#ff0;color:#000;padding:10px;font:12px/1.4 monospace;word-break:break-all"></pre>
+
+    <!-- NORMAL PAGE -->
     <div class="container">
         <div id="loading" class="loading">Loading profile...</div>
-        <div id="profile" style="display: none;">
+        <div id="profile" style="display:none">
             <div class="profile-card">
                 <div class="avatar">👤</div>
                 <div class="name" id="name"></div>
                 <div class="username" id="username"></div>
                 <div>Size: <strong id="size"></strong></div>
             </div>
-            
             <div class="link-grid">
-                <a href="#" class="link-btn" id="tgLink">
-                    💬 Telegram Message
-                </a>
-                <a href="mailto:#" class="link-btn" id="emailLink">
-                    📧 Email
-                </a>
+                <a href="#" class="link-btn" id="tgLink">💬 Telegram Message</a>
+                <a href="mailto:#" class="link-btn" id="emailLink">📧 Email</a>
             </div>
-            
-            <div style="margin-top: 30px; opacity: 0.7; font-size: 12px;">
-                🎽 NFC Linktree Hoodie | Tap to share
-            </div>
+            <div style="margin-top:30px;opacity:.7;font-size:12px">🎽 NFC Linktree Hoodie | Tap to share</div>
         </div>
-        
-        <div id="notFound" class="not-found" style="display: none;">
+        <div id="notFound" class="not-found" style="display:none">
             <h3>Profile Not Found</h3>
             <p>This hoodie profile is not active yet.</p>
         </div>
     </div>
 
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
-    // grab code from path …/examine/eadoc  (or /anything/eadoc)
-// -----  NEW CODE GRABBER  -----
-const code = window.location.search.slice(1) ||          // ?cea121
-             window.location.pathname.split('/').pop();  // fallback /examine/cea121
-if (!code || code.length < 4) {
-    showNotFound();
-} else {
-    loadProfile();
+/* ----------  DEBUG  ---------- */
+const rawPath = window.location.pathname;
+const rawQS   = window.location.search;
+
+// Get Telegram start parameter
+let tgStartParam = '';
+if (window.Telegram?.WebApp) {
+    tgStartParam = window.Telegram.WebApp.initDataUnsafe?.start_parameter || '';
 }
-    async function loadProfile() {
-        try {
-            const response = await fetch(`https://api.fungerbil.com/api/profile/${code}`);
-            const data     = await response.json();
 
-            if (response.ok) {
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('profile').style.display = 'block';
+// Try multiple sources for the code
+let code = new URLSearchParams(rawQS).get('tgWebAppStartParam') || // 1. Telegram query param
+           tgStartParam ||                                          // 2. Telegram API
+           new URLSearchParams(rawQS).get('code') ||                // 3. Direct ?code=cea121
+           rawPath.split('/').filter(Boolean).pop();                // 4. Path /examine/cea121
+           
+// Clean up the code if it's just "examine"
+if (code === 'examine') code = '';
 
-                document.getElementById('name').textContent     = data.firstName;
-                document.getElementById('username').textContent = data.tgHandle;
-                document.getElementById('size').textContent     = data.size;
+document.getElementById('dbg').textContent =
+  'pathname: ' + rawPath + 
+  '\nquery: ' + rawQS + 
+  '\ntg_start: "' + tgStartParam + '"' +
+  '\n→ code: "' + code + '"';
+/* ----------  /DEBUG  ---------- */
 
-                document.getElementById('tgLink').href   = `https://t.me/${data.tgHandle.slice(1)}`;
-                document.getElementById('emailLink').href = `mailto:${data.email}`;
-            } else {
-                showNotFound();
-            }
-        } catch (error) {
-            console.error('Error loading profile:', error);
-            showNotFound();
-        }
-    }
+if (!code || code.length < 4) { showNotFound(); } else { loadProfile(); }
 
-    function showNotFound() {
+async function loadProfile() {
+    try {
+        const apiUrl = `https://api.fungerbil.com/api/profile/${code}`;
+        console.log('Fetching:', apiUrl);
+
+        const res = await fetch(apiUrl);
+        if (!res.ok) { console.error('API:', res.status); showNotFound(); return; }
+
+        const data = await res.json();
+        console.log('Success:', data);
+
         document.getElementById('loading').style.display = 'none';
-        document.getElementById('notFound').style.display = 'block';
+        document.getElementById('profile').style.display = 'block';
+
+        document.getElementById('name').textContent = data.firstName;
+        document.getElementById('username').textContent = data.tgHandle;
+        document.getElementById('size').textContent = data.size;
+        document.getElementById('tgLink').href = `https://t.me/${data.tgHandle.slice(1)}`;
+        document.getElementById('emailLink').href = `mailto:${data.email}`;
+    } catch (e) {
+        console.error('Fetch error:', e);
+        showNotFound();
     }
+}
+
+function showNotFound() {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('notFound').style.display = 'block';
+}
 </script>
 </body>
 </html>
