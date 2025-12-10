@@ -116,13 +116,40 @@
         tg.ready();
         tg.expand();
 
+        // Helper function to show alerts with fallback
+        function showAlert(message) {
+            try {
+                if (tg.showAlert) {
+                    tg.showAlert(message);
+                } else {
+                    alert(message);
+                }
+            } catch (e) {
+                console.warn('showAlert failed, using fallback:', e);
+                alert(message);
+            }
+        }
+
         async function loadPending() {
             try {
                 // Use api.fungerbil.com for API calls when on fungerbil.com
                 const apiBase = window.location.hostname === 'fungerbil.com' 
                     ? 'https://api.fungerbil.com' 
                     : window.location.origin;
-                const response = await fetch(`${apiBase}/api/pending`);
+                const apiUrl = `${apiBase}/api/pending`;
+                console.log('Fetching pending from:', apiUrl);
+                
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error(`Expected JSON but got ${contentType}`);
+                }
+                
                 const pending = await response.json();
                 
                 document.getElementById('loading').style.display = 'none';
@@ -158,7 +185,15 @@
                 
             } catch (error) {
                 console.error('Error loading pending:', error);
-                document.getElementById('loading').textContent = 'Failed to load. Refresh to retry.';
+                document.getElementById('loading').innerHTML = `
+                    <div style="color: #dc3545;">
+                        ❌ Failed to load orders<br>
+                        <small>${error.message}</small><br>
+                        <button onclick="loadPending()" style="margin-top: 10px; padding: 8px 16px; cursor: pointer;">
+                            🔄 Retry
+                        </button>
+                    </div>
+                `;
             }
         }
 
@@ -169,10 +204,10 @@
             const url = `https://t.me/${botUsername}/Examine?startapp=${code}`;
             
             navigator.clipboard.writeText(url).then(() => {
-                tg.showAlert(`✅ NFC Link Copied!\n\n${url}\n\nBurn this link to the NFC chip using NFC Tools app.`);
+                showAlert(`✅ NFC Link Copied!\n\n${url}\n\nBurn this link to the NFC chip using NFC Tools app.`);
             }).catch(err => {
                 console.error('Copy failed:', err);
-                tg.showAlert('Failed to copy. Please try again.');
+                showAlert('Failed to copy. Please try again.');
             });
         }
 
@@ -207,14 +242,14 @@
                             }
                         }, 300);
                     }
-                    tg.showAlert(`✅ Order #${code} marked as burned!`);
+                    showAlert(`✅ Order #${code} marked as burned!`);
                 } else {
                     const error = await response.json();
-                    tg.showAlert(`❌ Failed to approve: ${error.error || 'Unknown error'}`);
+                    showAlert(`❌ Failed to approve: ${error.error || 'Unknown error'}`);
                 }
             } catch (error) {
                 console.error('Approve error:', error);
-                tg.showAlert('❌ Network error. Please try again.');
+                showAlert('❌ Network error. Please try again.');
             }
         }
 
