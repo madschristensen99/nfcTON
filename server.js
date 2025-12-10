@@ -13,13 +13,27 @@ app.use(express.static(path.join(__dirname, 'packages/bot/static')));
 
 // MongoDB setup
 const { MongoClient } = require('mongodb');
-const client = new MongoClient(process.env.DATABASE_URL || '');
+
+// Add appName to connection string if not present
+let mongoUrl = process.env.DATABASE_URL || '';
+if (mongoUrl && !mongoUrl.includes('appName=')) {
+  mongoUrl += (mongoUrl.includes('?') ? '&' : '?') + 'retryWrites=true&w=majority';
+}
+
+const client = new MongoClient(mongoUrl, {
+  tlsAllowInvalidCertificates: true, // Temporary workaround for Node v22
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 10000,
+});
 const db = client.db('hoodie');
 const hoodiesCollection = db.collection('hoodies');
 
 client.connect().then(() => {
   console.log('✅ Connected to MongoDB');
-}).catch(console.error);
+}).catch((err) => {
+  console.error('❌ MongoDB connection failed:', err.message);
+  console.error('Please check your DATABASE_URL in .env file');
+});
 
 // Generate random code
 function generateCode() {
@@ -103,6 +117,7 @@ bot.command('start', async (ctx) => {
       reply_markup: {
         inline_keyboard: [
           [{ text: '🔍 View Full Profile', callback_data: `view_my_profile` }],
+          [{ text: '✏️ Edit Profile', callback_data: 'edit_profile' }],
           [{ text: '⚙️ Admin Dashboard', callback_data: 'admin' }]
         ]
       }
@@ -145,7 +160,8 @@ bot.command('admin', async (ctx) => {
       message += '📋 Pending Orders:\n\n';
       pending.forEach(item => {
         const botUsername = ctx.me.username;
-        const nfcLink = `https://t.me/${botUsername}?start=${item.code}`;
+        // Use Mini App direct link format
+        const nfcLink = `https://t.me/${botUsername}/Examine?startapp=${item.code}`;
         message += `👤 ${item.firstName} (@${item.tgHandle.replace('@', '')})\n`;
         message += `📍 Code: #${item.code}\n`;
         message += `🔗 NFC Link:\n${nfcLink}\n\n`;
@@ -217,7 +233,8 @@ bot.on('callback_query:data', async (ctx) => {
           message += '📋 Pending Orders:\n\n';
           pending.forEach(item => {
             const botUsername = ctx.me.username;
-            const nfcLink = `https://t.me/${botUsername}?start=${item.code}`;
+            // Use Mini App direct link format
+            const nfcLink = `https://t.me/${botUsername}/Examine?startapp=${item.code}`;
             message += `👤 ${item.firstName} (@${item.tgHandle.replace('@', '')})\n`;
             message += `📍 Code: #${item.code}\n`;
             message += `🔗 NFC Link:\n${nfcLink}\n\n`;
@@ -237,6 +254,65 @@ bot.on('callback_query:data', async (ctx) => {
         return;
       }
       await ctx.reply(`🎽 Your Hoodie Profile #${userProfile.code}\n\nName: ${userProfile.firstName}\nTelegram: ${userProfile.tgHandle}\nEmail: ${userProfile.email}\nSize: ${userProfile.size}\nStatus: ${userProfile.status}\nCreated: ${userProfile.createdAt.toDateString()}${userProfile.status === 'burned' ? `\n🖨️ Approved: ${userProfile.burnedAt.toDateString()}` : ''}`);
+      break;
+    case 'edit_profile':
+      await ctx.answerCallbackQuery();
+      const profileToEdit = await hoodiesCollection.findOne({ telegramId: userId });
+      if (!profileToEdit) {
+        await ctx.reply("❌ You don't have a profile yet. Use /start to sign up!");
+        return;
+      }
+      await ctx.reply("✏️ What would you like to edit?", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '👤 Name', callback_data: 'edit_name' }],
+            [{ text: '📧 Email', callback_data: 'edit_email' }],
+            [{ text: '📏 Size', callback_data: 'edit_size' }],
+            [{ text: '❌ Cancel', callback_data: 'cancel_edit' }]
+          ]
+        }
+      });
+      break;
+    case 'edit_name':
+      await ctx.answerCallbackQuery();
+      userSessions.set(userId, { step: 'edit_name', telegramId: userId });
+      await ctx.reply("👤 What's your new name?");
+      break;
+    case 'edit_email':
+      await ctx.answerCallbackQuery();
+      userSessions.set(userId, { step: 'edit_email', telegramId: userId });
+      await ctx.reply("📧 What's your new email address?");
+      break;
+    case 'edit_size':
+      await ctx.answerCallbackQuery();
+      await ctx.reply("📏 What's your new hoodie size?", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'S', callback_data: 'size_S' }, { text: 'M', callback_data: 'size_M' }],
+            [{ text: 'L', callback_data: 'size_L' }, { text: 'XL', callback_data: 'size_XL' }],
+            [{ text: 'XXL', callback_data: 'size_XXL' }],
+            [{ text: '❌ Cancel', callback_data: 'cancel_edit' }]
+          ]
+        }
+      });
+      break;
+    case 'size_S':
+    case 'size_M':
+    case 'size_L':
+    case 'size_XL':
+    case 'size_XXL':
+      await ctx.answerCallbackQuery();
+      const newSize = data.split('_')[1];
+      await hoodiesCollection.updateOne(
+        { telegramId: userId },
+        { $set: { size: newSize } }
+      );
+      await ctx.reply(`✅ Your hoodie size has been updated to ${newSize}!`);
+      break;
+    case 'cancel_edit':
+      await ctx.answerCallbackQuery();
+      userSessions.delete(userId);
+      await ctx.reply("❌ Edit cancelled.");
       break;
     case 'view_profile':
     case 'search_profile':
@@ -283,6 +359,28 @@ bot.on('message:text', async (ctx) => {
         session.step = 'size';
         userSessions.set(userId, session);
         await ctx.reply("📏 What size hoodie do you want?\n\nOptions: S, M, L, XL, XXL");
+        break;
+        
+      case 'edit_name':
+        await hoodiesCollection.updateOne(
+          { telegramId: userId },
+          { $set: { firstName: text } }
+        );
+        userSessions.delete(userId);
+        await ctx.reply(`✅ Your name has been updated to ${text}!`);
+        break;
+        
+      case 'edit_email':
+        if (!text.includes('@')) {
+          await ctx.reply("❌ Please enter a valid email address");
+          return;
+        }
+        await hoodiesCollection.updateOne(
+          { telegramId: userId },
+          { $set: { email: text } }
+        );
+        userSessions.delete(userId);
+        await ctx.reply(`✅ Your email has been updated to ${text}!`);
         break;
         
       case 'size':
@@ -404,6 +502,37 @@ app.get('/api/profile/:code', async (req, res) => {
   }
 });
 
+app.patch('/api/profile/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { firstName, email, size } = req.body;
+    
+    const updateFields = {};
+    if (firstName) updateFields.firstName = firstName;
+    if (email) updateFields.email = email;
+    if (size) updateFields.size = size;
+    
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    const result = await hoodiesCollection.findOneAndUpdate(
+      { code },
+      { $set: updateFields },
+      { returnDocument: 'after' }
+    );
+
+    if (!result) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    res.json({ success: true, profile: result });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
 app.patch('/api/approve/:code', async (req, res) => {
   try {
     const { code } = req.params;
@@ -455,8 +584,9 @@ app.listen(PORT, () => {
   console.log(`🔗 API endpoints accessible at: ${BOT_DOMAIN}/api/*`);
   console.log(`🌐 Web interfaces at: ${BOT_DOMAIN}/`);
   console.log(`\n📋 API Endpoints:`);
-  console.log(`   POST ${BOT_DOMAIN}/api/signup`);
-  console.log(`   GET  ${BOT_DOMAIN}/api/pending`);
-  console.log(`   GET  ${BOT_DOMAIN}/api/profile/:code`);
+  console.log(`   POST  ${BOT_DOMAIN}/api/signup`);
+  console.log(`   GET   ${BOT_DOMAIN}/api/pending`);
+  console.log(`   GET   ${BOT_DOMAIN}/api/profile/:code`);
+  console.log(`   PATCH ${BOT_DOMAIN}/api/profile/:code`);
   console.log(`   PATCH ${BOT_DOMAIN}/api/approve/:code`);
 });

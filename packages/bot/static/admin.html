@@ -118,7 +118,11 @@
 
         async function loadPending() {
             try {
-                const response = await fetch('/api/pending');
+                // Use api.fungerbil.com for API calls when on fungerbil.com
+                const apiBase = window.location.hostname === 'fungerbil.com' 
+                    ? 'https://api.fungerbil.com' 
+                    : window.location.origin;
+                const response = await fetch(`${apiBase}/api/pending`);
                 const pending = await response.json();
                 
                 document.getElementById('loading').style.display = 'none';
@@ -161,7 +165,8 @@
         function copyURL(code) {
             // Generate proper HTTPS Telegram deep link for NFC burning
             const botUsername = tg.initDataUnsafe?.bot?.username || window.location.hostname.split('.')[0];
-            const url = `https://t.me/${botUsername}?start=${code}`;
+            // Use Mini App direct link format
+            const url = `https://t.me/${botUsername}/Examine?startapp=${code}`;
             
             navigator.clipboard.writeText(url).then(() => {
                 tg.showAlert(`✅ NFC Link Copied!\n\n${url}\n\nBurn this link to the NFC chip using NFC Tools app.`);
@@ -177,7 +182,11 @@
             }
             
             try {
-                const response = await fetch(`/api/approve/${code}`, {
+                // Use api.fungerbil.com for API calls when on fungerbil.com
+                const apiBase = window.location.hostname === 'fungerbil.com' 
+                    ? 'https://api.fungerbil.com' 
+                    : window.location.origin;
+                const response = await fetch(`${apiBase}/api/approve/${code}`, {
                     method: 'PATCH'
                 });
                 
