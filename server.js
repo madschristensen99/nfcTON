@@ -1,11 +1,18 @@
 // Simple local server for hoodie NFC app - no build needed
 const express = require('express');
 const path = require('path');
+const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BOT_DOMAIN = process.env.BOT_DOMAIN || `http://localhost:${PORT}`;
+
+// CORS configuration - allow requests from fungerbil.com and other origins
+app.use(cors({
+  origin: ['https://fungerbil.com', 'https://www.fungerbil.com', 'http://localhost:3000'],
+  credentials: true
+}));
 
 // JSON parsing
 app.use(express.json());
